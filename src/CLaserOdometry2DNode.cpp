@@ -40,11 +40,50 @@ CLaserOdometry2DNode::CLaserOdometry2DNode(): Node("CLaserOdometry2DNode")
   this->declare_parameter<double>("freq", 10.0);
   this->get_parameter("freq", freq);
 
+  // Declare and get laser pose parameters (as an example: x, y, z, roll, pitch, yaw)
+  double laser_x = 0.0, laser_y = 0.0, laser_z = 0.0, laser_roll = 0.0, laser_pitch = 0.0, laser_yaw = 0.0;
+  this->declare_parameter<double>("base_link_to_laser_tf.x", 0.0);
+  this->declare_parameter<double>("base_link_to_laser_tf.y", 0.0);
+  this->declare_parameter<double>("base_link_to_laser_tf.z", 0.0);
+  this->declare_parameter<double>("base_link_to_laser_tf.roll", 0.0);
+  this->declare_parameter<double>("base_link_to_laser_tf.pitch", 0.0);
+  this->declare_parameter<double>("base_link_to_laser_tf.yaw", 0.0);
+  this->get_parameter("base_link_to_laser_tf.x", laser_x);
+  this->get_parameter("base_link_to_laser_tf.y", laser_y);
+  this->get_parameter("base_link_to_laser_tf.z", laser_z);
+  this->get_parameter("base_link_to_laser_tf.roll", laser_roll);
+  this->get_parameter("base_link_to_laser_tf.pitch", laser_pitch);
+  this->get_parameter("base_link_to_laser_tf.yaw", laser_yaw);
+
+  // Declare and get initial robot pose parameters (x, y, z, roll, pitch, yaw)
+  double init_x = 0.0, init_y = 0.0, init_z = 0.0, init_roll = 0.0, init_pitch = 0.0, init_yaw = 0.0;
+  this->declare_parameter<double>("initial_pose.x", 0.0);
+  this->declare_parameter<double>("initial_pose.y", 0.0);
+  this->declare_parameter<double>("initial_pose.z", 0.0);
+  this->declare_parameter<double>("initial_pose.roll", 0.0);
+  this->declare_parameter<double>("initial_pose.pitch", 0.0);
+  this->declare_parameter<double>("initial_pose.yaw", 0.0);
+  this->get_parameter("initial_pose.x", init_x);
+  this->get_parameter("initial_pose.y", init_y);
+  this->get_parameter("initial_pose.z", init_z);
+  this->get_parameter("initial_pose.roll", init_roll);
+  this->get_parameter("initial_pose.pitch", init_pitch);
+  this->get_parameter("initial_pose.yaw", init_yaw);
+
+  // Compose the laser_tf pose
+  laser_tf = Pose3d::Identity();
+  laser_tf.linear() = matrixRollPitchYaw(laser_roll, laser_pitch, laser_yaw).cast<double>();
+  laser_tf.translation()(0) = laser_x;
+  laser_tf.translation()(1) = laser_y;
+  laser_tf.translation()(2) = laser_z;
+
   // Init Publishers and Subscribers
   //---------------------------------
-  buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
-  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*buffer_);
-  odom_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(this);
+  if (publish_tf)
+  {
+    RCLCPP_INFO(get_logger(), "Publishing TF: [base_link] to [odom]");
+    odom_broadcaster = std::make_unique<tf2_ros::TransformBroadcaster>(this);
+  }
   odom_pub  = this->create_publisher<nav_msgs::msg::Odometry>(odom_topic, 5);
   laser_sub = this->create_subscription<sensor_msgs::msg::LaserScan>(laser_scan_topic,rclcpp::QoS(rclcpp::KeepLast(1)).best_effort().durability_volatile(),
       std::bind(&CLaserOdometry2DNode::LaserCallBack, this, std::placeholders::_1));
@@ -52,21 +91,22 @@ CLaserOdometry2DNode::CLaserOdometry2DNode(): Node("CLaserOdometry2DNode")
   // Initialize pose
   if (init_pose_from_topic != "")
   {
-    initPose_sub = this->create_subscription<nav_msgs::msg::Odometry>(init_pose_from_topic,rclcpp::QoS(rclcpp::KeepLast(1)).best_effort().durability_volatile(),
+    initPose_sub = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+        init_pose_from_topic,
+        rclcpp::QoS(rclcpp::KeepLast(1)).best_effort().durability_volatile(),
         std::bind(&CLaserOdometry2DNode::initPoseCallBack, this, std::placeholders::_1));
     GT_pose_initialized  = false;
   }
   else
   {
-    // init to 0
+    // init to parameters
     GT_pose_initialized = true;
-    initial_robot_pose.pose.pose.position.x = 0;
-    initial_robot_pose.pose.pose.position.y = 0;
-    initial_robot_pose.pose.pose.position.z = 0;
-    initial_robot_pose.pose.pose.orientation.w = 0;
-    initial_robot_pose.pose.pose.orientation.x = 0;
-    initial_robot_pose.pose.pose.orientation.y = 0;
-    initial_robot_pose.pose.pose.orientation.z = 0;
+    initial_robot_pose.pose.pose.position.x = init_x;
+    initial_robot_pose.pose.pose.position.y = init_y;
+    initial_robot_pose.pose.pose.position.z = init_z;
+    tf2::Quaternion q;
+    q.setRPY(init_roll, init_pitch, init_yaw);
+    initial_robot_pose.pose.pose.orientation = tf2::toMsg(q);
   }
 
   // Init variables
@@ -98,55 +138,11 @@ void CLaserOdometry2DNode::LaserCallBack(const sensor_msgs::msg::LaserScan::Shar
     else
     {
       // Initialize module on first scan (from laser params)
-      setLaserPoseFromTf();
+      rf2o_ref.setLaserPose(laser_tf);
       rf2o_ref.init(last_scan, initial_robot_pose.pose.pose);
       rf2o_ref.first_laser_scan = false;
     }
   }
-}
-
-
-/** 
-   * Gets the laser pose with respect the base_link (through TF)
-   * This allow estimation of the odometry with respect to the robot base reference system.
-   */
-bool CLaserOdometry2DNode::setLaserPoseFromTf()
-{  
-  bool retrieved = false;  
-  geometry_msgs::msg::TransformStamped tf_laser;
-
-  try
-  {
-    tf_laser = buffer_->lookupTransform(base_frame_id, last_scan.header.frame_id, tf2::TimePointZero);
-    retrieved = true;
-  }
-  catch (tf2::TransformException &ex)
-  {
-    RCLCPP_ERROR(get_logger(), "%s",ex.what());
-    retrieved = false;
-  }
-
-  // Keep this transform as Eigen Matrix3d
-  tf2::Transform transform;
-  tf2::convert(tf_laser.transform, transform);
-  const tf2::Matrix3x3 &basis = transform.getBasis();
-  Eigen::Matrix3d R;
-
-  for(int r = 0; r < 3; r++)
-    for(int c = 0; c < 3; c++)
-      R(r,c) = basis[r][c];
-
-  Pose3d laser_tf(R);
-
-  const tf2::Vector3 &t = transform.getOrigin();
-  laser_tf.translation()(0) = t[0];
-  laser_tf.translation()(1) = t[1];
-  laser_tf.translation()(2) = t[2];
-
-  // Sets this transform in rf2o 
-  rf2o_ref.setLaserPose(laser_tf);
-
-  return retrieved;
 }
 
 
@@ -176,7 +172,7 @@ void CLaserOdometry2DNode::process()
   else
   {
     // This is a warning. We depend on laser scans, so no meaning running faster than scan freq.
-    RCLCPP_WARN(get_logger(), "Waiting for laser_scans....");
+    RCLCPP_DEBUG(get_logger(), "Waiting for laser_scans....");
   }
 }
 
@@ -186,12 +182,14 @@ void CLaserOdometry2DNode::process()
  * By default the odometry will start from pose_0, but when comparing different methods
  * it may be necessary to start from a different pose.
 */
-void CLaserOdometry2DNode::initPoseCallBack(const nav_msgs::msg::Odometry::SharedPtr new_initPose)
+void CLaserOdometry2DNode::initPoseCallBack(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr new_initPose)
 {
   // Initialize module on first GT pose. Else do Nothing!
   if (!GT_pose_initialized)
   {
-    initial_robot_pose = *new_initPose;
+    initial_robot_pose.pose.pose = new_initPose->pose.pose;
+    initial_robot_pose.pose.covariance = new_initPose->pose.covariance;
+    initial_robot_pose.header = new_initPose->header;
     GT_pose_initialized = true;
   }
 }
@@ -242,8 +240,6 @@ void CLaserOdometry2DNode::publish()
     odom_broadcaster->sendTransform(odom_trans);
   }
 }
-
-} /* namespace rf2o */
 
 
 //-----------------------------------------------------------------------------------

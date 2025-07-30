@@ -22,12 +22,23 @@ def generate_launch_description():
                 name='rf2o_laser_odometry',
                 output='screen',
                 parameters=[{
-                    'laser_scan_topic' : '/scan',
+                    'laser_scan_topic' : '/autodrive/roboracer_1/lidar',
                     'odom_topic' : '/odom_rf2o',
-                    'publish_tf' : True,
-                    'base_frame_id' : 'base_link',
-                    'odom_frame_id' : 'odom',
+                    'publish_tf' : False,
+                    'base_frame_id' : 'roboracer_1',
+                    'odom_frame_id' : 'world',
                     'init_pose_from_topic' : '',
-                    'freq' : 20.0}],
+                    'freq' : 20.0,
+                    # Laser TF parameters
+                    'base_link_to_laser_tf.x': 0.273,
+                    'base_link_to_laser_tf.y': 0.0,
+                    'base_link_to_laser_tf.z': 0.096,
+                    # Initial pose parameters
+                    'initial_pose.x': 0.7406,
+                    'initial_pose.y': 3.1583,
+                    'initial_pose.z': 0.0592,
+                    'initial_pose.roll': 0.0313977,
+                    'initial_pose.yaw': -1.5707963,
+                }],
             ),
     ])

@@ -17,7 +17,6 @@ public:
   CLaserOdometry2DNode();
   void process();
   void publish();
-  bool setLaserPoseFromTf();
   bool scan_available();
 
   // Params & vars
@@ -32,18 +31,20 @@ public:
 
   sensor_msgs::msg::LaserScan                     last_scan;
   bool                                            GT_pose_initialized;
-  std::shared_ptr<tf2_ros::Buffer>                buffer_;
-  std::shared_ptr<tf2_ros::TransformListener>     tf_listener_;  
   std::unique_ptr<tf2_ros::TransformBroadcaster>  odom_broadcaster;
   nav_msgs::msg::Odometry                         initial_robot_pose;
 
+  // Laser pose as parameter
+  Pose3d laser_tf;
+
   // Subscriptions & Publishers
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr  laser_sub;
-  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr      initPose_sub;
+  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initPose_sub;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr         odom_pub;
 
   // CallBacks
   void LaserCallBack(const sensor_msgs::msg::LaserScan::SharedPtr new_scan);
-  void initPoseCallBack(const nav_msgs::msg::Odometry::SharedPtr new_initPose);
+  void initPoseCallBack(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr new_initPose);
 };
 
+}
