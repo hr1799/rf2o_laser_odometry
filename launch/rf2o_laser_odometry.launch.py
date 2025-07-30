@@ -37,7 +37,6 @@ def generate_launch_description():
                     'initial_pose.x': 0.7406,
                     'initial_pose.y': 3.1583,
                     'initial_pose.z': 0.0592,
-                    'initial_pose.roll': 0.0313977,
                     'initial_pose.yaw': -1.5707963,
                 }],
             ),
