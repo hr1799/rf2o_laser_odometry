@@ -130,8 +130,7 @@ void CLaserOdometry2DNode::LaserCallBack(const sensor_msgs::msg::LaserScan::Shar
     if (rf2o_ref.first_laser_scan == false)
     {
       // copy laser range data to rf2o internal variable
-      for (unsigned int i = 0; i < rf2o_ref.width; i++)
-        rf2o_ref.range_wf(i) = new_scan->ranges[i];
+      std::copy(new_scan->ranges.begin(), new_scan->ranges.begin() + rf2o_ref.width, rf2o_ref.range_wf.data());
       // inform of new scan available
       new_scan_available = true;
     }

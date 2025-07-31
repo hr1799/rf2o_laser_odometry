@@ -26,18 +26,18 @@ def generate_launch_description():
                     'odom_topic' : '/odom_rf2o',
                     'publish_tf' : False,
                     'base_frame_id' : 'roboracer_1',
-                    'odom_frame_id' : 'world',
+                    'odom_frame_id' : 'odom',
                     'init_pose_from_topic' : '',
                     'freq' : 20.0,
                     # Laser TF parameters
                     'base_link_to_laser_tf.x': 0.273,
                     'base_link_to_laser_tf.y': 0.0,
                     'base_link_to_laser_tf.z': 0.096,
-                    # Initial pose parameters
-                    'initial_pose.x': 0.7406,
-                    'initial_pose.y': 3.1583,
-                    'initial_pose.z': 0.0592,
-                    'initial_pose.yaw': -1.5707963,
+                    # Initial pose parameters w.r.t to world
+                    # 'initial_pose.x': 0.7406,
+                    # 'initial_pose.y': 3.1583,
+                    # 'initial_pose.z': 0.0592,
+                    # 'initial_pose.yaw': -1.5707963,
                 }],
             ),
     ])

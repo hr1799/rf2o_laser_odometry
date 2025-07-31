@@ -70,7 +70,7 @@ using MatrixS31 = Eigen::Matrix<Scalar, 3, 1>;
 using IncrementCov = Eigen::Matrix<Scalar, 3, 3>;
 
 
-class CLaserOdometry2D: public rclcpp::Node
+class CLaserOdometry2D
 {
 public:
 
@@ -155,6 +155,7 @@ public:
   bool test;
   std::vector<double> last_m_lin_speeds;
   std::vector<double> last_m_ang_speeds;
+  const int speed_filter_window_size = 5;
 
   // Methods
   void createImagePyramid();
