@@ -56,19 +56,41 @@ CLaserOdometry2DNode::CLaserOdometry2DNode(): Node("CLaserOdometry2DNode")
   this->get_parameter("base_link_to_laser_tf.yaw", laser_yaw);
 
   // Declare and get initial robot pose parameters (x, y, z, roll, pitch, yaw)
-  double init_x = 0.0, init_y = 0.0, init_z = 0.0, init_roll = 0.0, init_pitch = 0.0, init_yaw = 0.0;
-  this->declare_parameter<double>("initial_pose.x", 0.0);
-  this->declare_parameter<double>("initial_pose.y", 0.0);
-  this->declare_parameter<double>("initial_pose.z", 0.0);
-  this->declare_parameter<double>("initial_pose.roll", 0.0);
-  this->declare_parameter<double>("initial_pose.pitch", 0.0);
-  this->declare_parameter<double>("initial_pose.yaw", 0.0);
+  // Initialize to NaN to detect if they were explicitly set
+  double init_x = std::numeric_limits<double>::quiet_NaN();
+  double init_y = std::numeric_limits<double>::quiet_NaN();
+  double init_z = std::numeric_limits<double>::quiet_NaN();
+  double init_roll = std::numeric_limits<double>::quiet_NaN();
+  double init_pitch = std::numeric_limits<double>::quiet_NaN();
+  double init_yaw = std::numeric_limits<double>::quiet_NaN();
+  
+  this->declare_parameter<double>("initial_pose.x", std::numeric_limits<double>::quiet_NaN());
+  this->declare_parameter<double>("initial_pose.y", std::numeric_limits<double>::quiet_NaN());
+  this->declare_parameter<double>("initial_pose.z", std::numeric_limits<double>::quiet_NaN());
+  this->declare_parameter<double>("initial_pose.roll", std::numeric_limits<double>::quiet_NaN());
+  this->declare_parameter<double>("initial_pose.pitch", std::numeric_limits<double>::quiet_NaN());
+  this->declare_parameter<double>("initial_pose.yaw", std::numeric_limits<double>::quiet_NaN());
   this->get_parameter("initial_pose.x", init_x);
   this->get_parameter("initial_pose.y", init_y);
   this->get_parameter("initial_pose.z", init_z);
   this->get_parameter("initial_pose.roll", init_roll);
   this->get_parameter("initial_pose.pitch", init_pitch);
   this->get_parameter("initial_pose.yaw", init_yaw);
+  
+  // Check if any initial pose parameters were explicitly set (not NaN)
+  bool has_initial_params = (!std::isnan(init_x) || !std::isnan(init_y) || !std::isnan(init_z) || 
+                            !std::isnan(init_roll) || !std::isnan(init_pitch) || !std::isnan(init_yaw));
+  
+  // If parameters were set but some are still NaN, set them to 0.0 as defaults
+  if (has_initial_params)
+  {
+    if (std::isnan(init_x)) init_x = 0.0;
+    if (std::isnan(init_y)) init_y = 0.0;
+    if (std::isnan(init_z)) init_z = 0.0;
+    if (std::isnan(init_roll)) init_roll = 0.0;
+    if (std::isnan(init_pitch)) init_pitch = 0.0;
+    if (std::isnan(init_yaw)) init_yaw = 0.0;
+  }
 
   // Compose the laser_tf pose
   laser_tf = Pose3d::Identity();
@@ -88,18 +110,11 @@ CLaserOdometry2DNode::CLaserOdometry2DNode(): Node("CLaserOdometry2DNode")
   laser_sub = this->create_subscription<sensor_msgs::msg::LaserScan>(laser_scan_topic,rclcpp::QoS(rclcpp::KeepLast(1)).best_effort().durability_volatile(),
       std::bind(&CLaserOdometry2DNode::LaserCallBack, this, std::placeholders::_1));
   
-  // Initialize pose
-  if (init_pose_from_topic != "")
+  bool has_topic = (init_pose_from_topic != "");
+  
+  if (has_topic && has_initial_params)
   {
-    initPose_sub = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
-        init_pose_from_topic,
-        rclcpp::QoS(rclcpp::KeepLast(1)).best_effort().durability_volatile(),
-        std::bind(&CLaserOdometry2DNode::initPoseCallBack, this, std::placeholders::_1));
-    GT_pose_initialized  = false;
-  }
-  else
-  {
-    // init to parameters
+    // Initialize with parameters
     GT_pose_initialized = true;
     initial_robot_pose.pose.pose.position.x = init_x;
     initial_robot_pose.pose.pose.position.y = init_y;
@@ -107,6 +122,42 @@ CLaserOdometry2DNode::CLaserOdometry2DNode(): Node("CLaserOdometry2DNode")
     tf2::Quaternion q;
     q.setRPY(init_roll, init_pitch, init_yaw);
     initial_robot_pose.pose.pose.orientation = tf2::toMsg(q);
+    
+    // Also subscribe to topic for reset functionality
+    initPose_sub = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+        init_pose_from_topic,
+        rclcpp::QoS(rclcpp::KeepLast(1)).best_effort().durability_volatile(),
+        std::bind(&CLaserOdometry2DNode::initPoseCallBack, this, std::placeholders::_1));
+  }
+  else if (has_topic && !has_initial_params)
+  {
+    // Subscribe to topic for initial pose
+    GT_pose_initialized = false;
+    initPose_sub = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+        init_pose_from_topic,
+        rclcpp::QoS(rclcpp::KeepLast(1)).best_effort().durability_volatile(),
+        std::bind(&CLaserOdometry2DNode::initPoseCallBack, this, std::placeholders::_1));
+  }
+  else if (!has_topic && has_initial_params)
+  {
+    // Initialize with parameters
+    GT_pose_initialized = true;
+    initial_robot_pose.pose.pose.position.x = init_x;
+    initial_robot_pose.pose.pose.position.y = init_y;
+    initial_robot_pose.pose.pose.position.z = init_z;
+    tf2::Quaternion q;
+    q.setRPY(init_roll, init_pitch, init_yaw);
+    initial_robot_pose.pose.pose.orientation = tf2::toMsg(q);
+  }
+  else
+  {
+    RCLCPP_ERROR(get_logger(), "ERROR: No initial pose configuration provided!");
+    RCLCPP_ERROR(get_logger(), "Please either:");
+    RCLCPP_ERROR(get_logger(), "  1. Set initial pose parameters (initial_pose.x, initial_pose.y, etc.)");
+    RCLCPP_ERROR(get_logger(), "  2. Set init_pose_from_topic parameter");
+    RCLCPP_ERROR(get_logger(), "  3. Set both for initialization with parameters and topic reset capability");
+    rclcpp::shutdown();
+    throw std::runtime_error("No initial pose configuration provided");
   }
 
   // Init variables
@@ -180,17 +231,69 @@ void CLaserOdometry2DNode::process()
  * This function is used to initialize the robot pose before estimating its odometry.
  * By default the odometry will start from pose_0, but when comparing different methods
  * it may be necessary to start from a different pose.
+ * This function now resets the odometry every time a new initial pose is received.
 */
 void CLaserOdometry2DNode::initPoseCallBack(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr new_initPose)
 {
-  // Initialize module on first GT pose. Else do Nothing!
-  if (!GT_pose_initialized)
+  // Store the new initial pose
+  initial_robot_pose.pose.pose = new_initPose->pose.pose;
+  initial_robot_pose.pose.covariance = new_initPose->pose.covariance;
+  initial_robot_pose.header = new_initPose->header;
+  
+  // Check if this is first initialization or a reset
+  bool was_initialized = GT_pose_initialized;
+  
+  // Mark as initialized
+  GT_pose_initialized = true;
+  
+  if (was_initialized)
   {
-    initial_robot_pose.pose.pose = new_initPose->pose.pose;
-    initial_robot_pose.pose.covariance = new_initPose->pose.covariance;
-    initial_robot_pose.header = new_initPose->header;
-    GT_pose_initialized = true;
+    // This is a reset operation
+    RCLCPP_INFO(get_logger(), "Resetting odometry to new initial pose: x=%.3f, y=%.3f, yaw=%.3f", 
+                new_initPose->pose.pose.position.x, 
+                new_initPose->pose.pose.position.y,
+                tf2::getYaw(new_initPose->pose.pose.orientation));
+    resetOdometry(new_initPose->pose.pose);
   }
+  else
+  {
+    // This is the first initialization
+    RCLCPP_INFO(get_logger(), "Initial pose received from topic: x=%.3f, y=%.3f, yaw=%.3f", 
+                new_initPose->pose.pose.position.x, 
+                new_initPose->pose.pose.position.y,
+                tf2::getYaw(new_initPose->pose.pose.orientation));
+  }
+}
+
+
+/**
+ * Reset the odometry system with a new pose
+*/
+void CLaserOdometry2DNode::resetOdometry(const geometry_msgs::msg::Pose& new_pose)
+{
+  // Convert ROS pose to Eigen pose
+  Pose3d reset_pose = Pose3d::Identity();
+  
+  // Set translation
+  reset_pose.translation()(0) = new_pose.position.x;
+  reset_pose.translation()(1) = new_pose.position.y;
+  reset_pose.translation()(2) = new_pose.position.z;
+  
+  // Extract yaw from quaternion and set rotation (only yaw for 2D odometry)
+  double yaw = tf2::getYaw(new_pose.orientation);
+  reset_pose.linear() = matrixYaw(yaw).cast<double>();
+  
+  // Reset the laser odometry module
+  rf2o_ref.Reset(reset_pose);
+  
+  // Reset module state
+  rf2o_ref.first_laser_scan = true;
+  rf2o_ref.module_initialized = false;
+  
+  // Clear scan availability flag
+  new_scan_available = false;
+  
+  RCLCPP_INFO(get_logger(), "Odometry system reset completed");
 }
 
 

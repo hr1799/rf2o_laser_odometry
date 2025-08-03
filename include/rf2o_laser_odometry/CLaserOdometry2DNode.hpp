@@ -1,5 +1,8 @@
 #include "rf2o_laser_odometry/CLaserOdometry2D.hpp"
 
+#include <stdexcept>
+#include <limits>
+#include <cmath>
 #include <tf2/convert.h>
 #include <tf2/exceptions.h>
 #include <tf2_ros/transform_broadcaster.h>
@@ -45,6 +48,9 @@ public:
   // CallBacks
   void LaserCallBack(const sensor_msgs::msg::LaserScan::SharedPtr new_scan);
   void initPoseCallBack(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr new_initPose);
+  
+  // Reset function
+  void resetOdometry(const geometry_msgs::msg::Pose& new_pose);
 };
 
 }
