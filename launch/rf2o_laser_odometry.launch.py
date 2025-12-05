@@ -15,6 +15,20 @@ from launch_ros.actions import Node
 def generate_launch_description():
 
     return LaunchDescription([
+            DeclareLaunchArgument('laser_scan_topic', default_value='/autodrive/roboracer_1/lidar'),
+            DeclareLaunchArgument('odom_topic', default_value='/odom_rf2o'),
+            DeclareLaunchArgument('publish_tf', default_value='False'),
+            DeclareLaunchArgument('base_frame_id', default_value='roboracer_1'),
+            DeclareLaunchArgument('odom_frame_id', default_value='map'),
+            DeclareLaunchArgument('init_pose_from_topic', default_value='/initialpose'),
+            DeclareLaunchArgument('freq', default_value='20.0'),
+            DeclareLaunchArgument('base_link_to_laser_tf_x', default_value='0.273'),
+            DeclareLaunchArgument('base_link_to_laser_tf_y', default_value='0.0'),
+            DeclareLaunchArgument('base_link_to_laser_tf_z', default_value='0.096'),
+            DeclareLaunchArgument('initial_pose_x', default_value='0.7406'),
+            DeclareLaunchArgument('initial_pose_y', default_value='3.1583'),
+            DeclareLaunchArgument('initial_pose_z', default_value='0.0592'),
+            DeclareLaunchArgument('initial_pose_yaw', default_value='-1.5707963'),
 
             Node(
                 package='rf2o_laser_odometry',
@@ -22,22 +36,20 @@ def generate_launch_description():
                 name='rf2o_laser_odometry',
                 output='screen',
                 parameters=[{
-                    'laser_scan_topic' : '/autodrive/roboracer_1/lidar',
-                    'odom_topic' : '/odom_rf2o',
-                    'publish_tf' : False,
-                    'base_frame_id' : 'roboracer_1',
-                    'odom_frame_id' : 'map',
-                    'init_pose_from_topic' : '/initialpose',
-                    'freq' : 20.0,
-                    # Laser TF parameters
-                    'base_link_to_laser_tf.x': 0.273,
-                    'base_link_to_laser_tf.y': 0.0,
-                    'base_link_to_laser_tf.z': 0.096,
-                    # Initial pose parameters w.r.t to world
-                    'initial_pose.x': 0.7406,
-                    'initial_pose.y': 3.1583,
-                    'initial_pose.z': 0.0592,
-                    'initial_pose.yaw': -1.5707963,
+                    'laser_scan_topic': LaunchConfiguration('laser_scan_topic'),
+                    'odom_topic': LaunchConfiguration('odom_topic'),
+                    'publish_tf': LaunchConfiguration('publish_tf'),
+                    'base_frame_id': LaunchConfiguration('base_frame_id'),
+                    'odom_frame_id': LaunchConfiguration('odom_frame_id'),
+                    'init_pose_from_topic': LaunchConfiguration('init_pose_from_topic'),
+                    'freq': LaunchConfiguration('freq'),
+                    'base_link_to_laser_tf.x': LaunchConfiguration('base_link_to_laser_tf_x'),
+                    'base_link_to_laser_tf.y': LaunchConfiguration('base_link_to_laser_tf_y'),
+                    'base_link_to_laser_tf.z': LaunchConfiguration('base_link_to_laser_tf_z'),
+                    'initial_pose.x': LaunchConfiguration('initial_pose_x'),
+                    'initial_pose.y': LaunchConfiguration('initial_pose_y'),
+                    'initial_pose.z': LaunchConfiguration('initial_pose_z'),
+                    'initial_pose.yaw': LaunchConfiguration('initial_pose_yaw'),
                 }],
             ),
     ])
